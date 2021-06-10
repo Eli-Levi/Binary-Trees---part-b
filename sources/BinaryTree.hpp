@@ -1,3 +1,8 @@
+#include <iostream>
+#include <stdlib.h>
+#include <stack>
+#include <string>
+
 namespace ariel
 {
     template <typename T>
@@ -10,51 +15,202 @@ namespace ariel
             Node *right_child;
             Node *left_child;
 
-            explicit Node(T val = 0, Node *r = nullptr, Node *l = nullptr) : value(val), right_child(r), left_child(l){};
+            explicit Node(T val, Node *r = nullptr, Node *l = nullptr) : value(val), right_child(r), left_child(l){};
+
+            // copy constructor for node
+           /* Node(const Node& rhs): value(rhs.value)
+            {
+                if (rhs.right_child != nullptr) {
+                    right_child = new Node(*(rhs.right_child));
+                }
+                if (rhs.left_child != nullptr) {
+                    left_child = new Node(*(rhs.left_child));
+                }
+            }*/
         };
+
+        void free_memory(Node *node) {
+            if (node == nullptr) {
+                return;
+            }
+            free_memory(node->left_child);
+            free_memory(node->right_child);
+            delete node;
+        }
+
+        void tree_copy(Node *store_where, Node *other)
+        {
+            if (other == nullptr)
+            {
+                return;
+            }
+            store_where = new Node(other->value);
+            tree_copy(store_where->right_child, other->right_child);
+            tree_copy(store_where->left_child, other->left_child);
+        }
 
         Node *root;
 
     public:
-        BinaryTree(){};
+        BinaryTree() = default;
 
-        BinaryTree(BinaryTree &other) //ctor constuctor
+        BinaryTree(BinaryTree &other) //ctor constructor
         {
-            // create iterator and make new nodes for the new BT.
-
+//            this->root = new Node(*(other.root));
+            tree_copy(this->root , other.root);
         }
 
-        //TODO add a method to delete the new done to the nodes.
-        ~BinaryTree(){}
+        ~BinaryTree()
+        {
+            free_memory(this->root);
+        }
 
-        BinaryTree<T> &add_root(T make_root) {
-            if (this->root == nullptr) {
+        // move constructor (moves from existing obj to non existing obj)
+        BinaryTree(BinaryTree<T> &&other) noexcept
+        {
+            this->root = other.root;
+            other.root = nullptr;
+        }
+
+        // move assignment (from existing obj to existing obj)
+        BinaryTree &operator=(BinaryTree<T> &&bt) noexcept
+        {
+            if (this->root)
+            {
+                free_memory(this->root);
+            }
+            this->root = bt.root;
+            bt.root = nullptr;
+            return *this;
+        }
+
+        // deep copy
+        BinaryTree<T> &operator=(const BinaryTree<T> &copy_from)
+        {
+            if (this != &copy_from)
+            {
+                free_memory(this->root);
+                tree_copy(this->root,copy_from.root);
+            }
+            return *this;
+        }
+
+        BinaryTree<T> &add_root(T make_root)
+        {
+            if (this->root == nullptr)
+            {
                 this->root = new Node(make_root);
-            } else {
+            }
+            else
+            {
                 this->root->value = make_root;
             }
             return *this;
         }
 
-        friend std::ostream &operator<<(std::ostream &os, BinaryTree<T> &print) { return os; }
-
-        // continue iterator.
-        class iterator // default inorder
+        // TODO actualize ostream operator
+        friend std::ostream &operator<<(std::ostream &os, BinaryTree<T> &print)
         {
-        protected:
+            return os;
+        }
+
+
+        class iterator
+        {
             Node *curr_node;
+            std::stack<Node *> travel;
+
+            void recursive_inorder(Node *next)
+            {
+                if (next == nullptr)
+                {
+                    return;
+                }
+                recursive_inorder(next->right_child);
+                travel.push(next);
+                recursive_inorder(next->left_child);
+            }
+
+            void recursive_preorder(Node *next)
+            {
+                if (next == nullptr)
+                {
+                    return;
+                }
+                recursive_inorder(next->right_child);
+                recursive_inorder(next->left_child);
+                travel.push(next);
+            }
+
+            void recursive_postorder(Node *next)
+            {
+                if (next == nullptr)
+                {
+                    return;
+                }
+                travel.push(next);
+                recursive_inorder(next->right_child);
+                recursive_inorder(next->left_child);
+            }
 
         public:
-            explicit iterator(Node *ptr = nullptr) : curr_node(ptr){};
-
-            virtual iterator &operator++(int) { return *this; } //++i
-
-            virtual iterator &operator++() // i++
+            explicit iterator(const std::string &iter_type = "inorder", Node *ptr = nullptr)
             {
+                if (ptr != nullptr)
+                {
+                    if (iter_type == "inorder")
+                    {
+                        recursive_inorder(ptr);
+                    }
+                    else if (iter_type == "postorder")
+                    {
+                        recursive_postorder(ptr);
+                    }
+                    else if (iter_type == "preorder")
+                    {
+                        recursive_preorder(ptr);
+                    }
+                    this->curr_node = travel.top();
+                }
+                else
+                {
+                    this->curr_node = ptr;
+                }
+            }
+
+            iterator &operator++() // ++i
+            {
+                travel.pop();
+                if (travel.empty())
+                {
+                    curr_node = nullptr;
+                }
+                else
+                {
+                    curr_node = travel.top();
+                }
                 return *this;
             }
 
-            T &operator=(T &other){};
+            iterator operator++(int) // i++
+            {
+                iterator tmp = *this;
+                travel.pop();
+                if (travel.empty())
+                {
+                    curr_node = nullptr;
+                }
+                else
+                {
+                    curr_node = travel.top();
+                }
+                return tmp;
+            }
+
+            iterator &operator=(T *other)
+            {
+                this->curr_node = other;
+            }
 
             bool operator==(const iterator &other) const { return curr_node == other.curr_node; }
 
@@ -70,160 +226,105 @@ namespace ariel
                 return &(curr_node->value);
             }
 
+            Node *get_curr_node() const
+            {
+                return this->curr_node;
+            }
+
+            std::stack<T *> &get_tree() { return travel; }
+            friend std::ostream &operator<<(std::ostream &os, iterator &print) { return os; }
         };
 
-        class inorder //: public iterator
+        BinaryTree<T>::iterator begin_preorder()
         {
-            Node *curr;
-
-        public:
-            explicit inorder(Node *ptr = nullptr) : curr(ptr){};
-
-            inorder &operator++(int) { return *this; } //i++
-
-            inorder &operator++() // ++i
-            {
-                return *this;
-            }
-
-            bool operator==(const inorder &other) const { return false; }
-
-            bool operator!=(const inorder &other) const { return false; }
-
-            T &operator*() const
-            {
-                return curr->value;
-            }
-
-            T *operator->() const
-            {
-                return &(curr->value);
-            }
-
-            friend std::ostream &operator<<(std::ostream &os, inorder &print) { return os; }
-
-            //iterator &begin_inorder() { return *this; };
-
-            //iterator &end_inorder() { return *this; };
-        };
-
-
-        class preorder //: public iterator
-        {
-            Node *curr;
-
-        public:
-            explicit preorder(Node *ptr = nullptr) : curr(ptr){};
-
-            preorder &operator++(int) { return *this; } //i++
-
-            preorder &operator++() // ++i
-            {
-                return *this;
-            }
-
-            bool operator==(const preorder &other) const { return false; }
-
-            bool operator!=(const preorder &other) const { return false; }
-
-            T &operator*() const
-            {
-                return curr->value;
-            }
-
-            T *operator->() const
-            {
-                return &(curr->value);
-            }
-
-            friend std::ostream &operator<<(std::ostream &os, preorder &print) { return os; }
-            //iterator &begin_preorder() { return *this; };
-
-            //iterator &end_preorder() { return *this; };
-        };
-
-
-        class postorder //: public iterator
-        {
-            Node *curr;
-
-        public:
-            explicit postorder(Node *ptr = nullptr) : curr(ptr){};
-
-            postorder &operator++(int) { return *this; } //i++
-
-            postorder &operator++() // ++i
-            {
-                return *this;
-            }
-
-            bool operator==(const postorder &other) const { return false; }
-
-            bool operator!=(const postorder &other) const { return false; }
-
-            T &operator*() const
-            {
-                return curr->value;
-            }
-
-            T *operator->() const
-            {
-                return &(curr->value);
-            }
-
-            friend std::ostream &operator<<(std::ostream &os, postorder &print) { return os; }
-            //iterator &begin_postorder() { return *this; };
-
-            //iterator &end_postorder() { return *this; };
-        };
-
-        BinaryTree<T>::preorder begin_preorder()
-        {
-            return preorder(this->root);
+            return iterator("preorder", this->root);
         }
-        BinaryTree<T>::preorder end_preorder()
+        BinaryTree<T>::iterator end_preorder()
         {
-            return preorder();
+            return (iterator("preorder"));
         }
 
-        BinaryTree<T>::inorder begin_inorder()
+        BinaryTree<T>::iterator begin_inorder()
         {
-            return inorder(this->root);
+            return iterator("inorder", this->root);
         }
 
-        BinaryTree<T>::inorder end_inorder()
+        BinaryTree<T>::iterator end_inorder()
         {
-            return inorder();
+            return iterator();
         }
 
-        BinaryTree<T>::postorder begin_postorder()
+        BinaryTree<T>::iterator begin_postorder()
         {
-            return postorder(this->root);
+            return iterator("postorder", this->root);
         }
 
-        BinaryTree<T>::postorder end_postorder()
+        BinaryTree<T>::iterator end_postorder()
         {
-            return postorder();
+            return iterator("postorder");
         }
 
-        BinaryTree<T>::inorder begin()
+        BinaryTree<T>::iterator begin()
         {
-            return inorder(this->root);
+            return iterator("inorder", this->root);
         }
 
-        BinaryTree<T>::inorder end()
+        BinaryTree<T>::iterator end()
         {
-            return inorder();
+            return iterator();
         }
 
         BinaryTree<T> &add_left(T root, T left)
         {
-            return *this;
+            if (this->root == nullptr)
+            {
+                throw std::invalid_argument("can't add a left child to a non existing tree");
+            }
+
+            iterator find_root = this->begin();
+            for (; find_root != this->end(); ++find_root)
+            {
+                if (*(find_root) == root)
+                {
+                    Node *curr_node = find_root.get_curr_node();
+                    if (curr_node->left_child == nullptr)
+                    {
+                        curr_node->left_child = new Node(left);
+                    }
+                    else
+                    {
+                        curr_node->left_child->value = left;
+                    }
+                    return *this;
+                }
+            }
+            throw std::invalid_argument("root was not found");
         }
 
         BinaryTree<T> &add_right(T root, T right)
         {
-            return *this;
+            if (this->root == nullptr)
+            {
+                throw std::invalid_argument("can't add a right child to a non existing tree");
+            }
+            iterator find_root = this->begin();
+            for (; find_root != this->end(); ++find_root)
+            {
+                if (*(find_root) == root)
+                {
+                    Node *curr_node = find_root.get_curr_node();
+                    if (curr_node->right_child == nullptr)
+                    {
+                        curr_node->right_child = new Node(right);
+                    }
+                    else
+                    {
+                        curr_node->right_child->value = right;
+                    }
+                    return *this;
+                }
+            }
+            throw std::invalid_argument("root was not found");
         }
 
         // getters and setters
@@ -231,6 +332,5 @@ namespace ariel
 
         Node *get_right(Node *father) { return father->right_child; }
         Node *get_left(Node *father) { return father->left_child; }
-
     };
 };
